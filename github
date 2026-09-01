@@ -20,3 +20,30 @@ for B in $(git for-each-ref --format='%(refname:short)' refs/remotes/origin/feat
   git merge-base --is-ancestor "$BASE" origin/master \
     && echo "OK   $B ($D)" || echo "FAIL $B ($D)"
 done
+
+
+git fetch origin --prune
+OD="2026-08-25"
+
+for B in ACC TST; do
+  echo "=== origin/$B ==="
+  git log --oneline --since="$OD" "origin/master..origin/$B" | while read -r LINE; do
+    C=${LINE%% *}
+    if git merge-base --is-ancestor "$C" origin/DEV; then
+      echo "  Z DEV:  $LINE"
+    else
+      echo "  własny: $LINE"
+    fi
+  done
+done
+
+git fetch origin --prune
+
+for B in ACC TST; do
+  BASE=$(git merge-base origin/DEV "origin/$B")
+  if git merge-base --is-ancestor "$BASE" origin/master; then
+    echo "OK   origin/$B (punkt wspólny z DEV jest w masterze)"
+  else
+    echo "FAIL origin/$B (ciągnie commity z DEV)"
+  fi
+done
