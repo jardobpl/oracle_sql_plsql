@@ -1,0 +1,22 @@
+git fetch origin --prune
+
+OD="2026-08-25"
+DO="2026-09-01"
+
+for B in $(git for-each-ref --format='%(refname:short)|%(committerdate:short)' refs/remotes/origin/feature/ \
+           | awk -F'|' -v a="$OD" -v b="$DO" '$2>=a && $2<b {print $1}'); do
+  BASE=$(git merge-base origin/develop "$B")
+  if git merge-base --is-ancestor "$BASE" origin/master; then
+    echo "OK   $B"
+  else
+    echo "FAIL $B (odbita z developu)"
+  fi
+done
+
+for B in $(git for-each-ref --format='%(refname:short)' refs/remotes/origin/feature/); do
+  D=$(git log -1 --format=%cs "$B")
+  [[ "$D" < "2026-08-25" ]] && continue
+  BASE=$(git merge-base origin/develop "$B")
+  git merge-base --is-ancestor "$BASE" origin/master \
+    && echo "OK   $B ($D)" || echo "FAIL $B ($D)"
+done
