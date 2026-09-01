@@ -1,30 +1,37 @@
+#!/bin/bash
+# Kandydaci do wdrożenia: gałęzie z commitami ponad master, sortowane malejąco
+
 git fetch origin --prune
-OD="2026-08-25"
 
-for B in $(git for-each-ref --format='%(refname:short)|%(committerdate:short)' refs/remotes/origin/ \
-           | grep -Ev '^origin/(HEAD|master|DEV|TST|ACC)\|' \
-           | awk -F'|' -v a="$OD" '$2>=a {print $1}'); do
-  ZRODLA=""
-  for E in DEV TST ACC; do
-    for C in $(git rev-list --first-parent --since="$OD" "origin/master..origin/$E"); do
-      if git merge-base --is-ancestor "$C" "$B"; then
-        ZRODLA="$ZRODLA $E"
-        break
-      fi
-    done
-  done
-  [ -z "$ZRODLA" ] && echo "OK   $B" || echo "FAIL $B (stoi na:$ZRODLA)"
-done
-
-******
-git fetch origin --prune
-OD="2026-08-25"
-
-git for-each-ref --sort=-committerdate \
-  --format='%(refname:short)|%(committerdate:short)' refs/remotes/origin/ \
-| grep -Ev '^origin/(HEAD|master|DEV|TST|ACC)\|' \
-| awk -F'|' -v a="$OD" '$2>=a {print $1}' \
+git for-each-ref --format='%(refname:short)' refs/remotes/origin/ \
+| grep -Ev '^origin/(HEAD|master|DEV|TST|ACC)$' \
 | while read -r B; do
     N=$(git rev-list --count "origin/master..$B")
-    printf "%-40s %3d\n" "$B" "$N"
-  done
+    [ "$N" -eq 0 ] && continue
+    BASE=$(git merge-base origin/master "$B")
+    printf "%4d  %s  %s  %s\n" \
+      "$N" \
+      "$(git log -1 --format=%cs "$B")" \
+      "$(git log -1 --format=%cs "$BASE")" \
+      "$B"
+  done \
+| sort -rn
+
+#!/bin/bash
+# Kandydaci do wdrożenia: gałęzie z commitami ponad master, sortowane malejąco
+
+git fetch origin --prune
+
+git for-each-ref --format='%(refname:short)' refs/remotes/origin/ \
+| grep -Ev '^origin/(HEAD|master|DEV|TST|ACC)$' \
+| while read -r B; do
+    N=$(git rev-list --count "origin/master..$B")
+    [ "$N" -eq 0 ] && continue
+    BASE=$(git merge-base origin/master "$B")
+    printf "%4d  %s  %s  %s\n" \
+      "$N" \
+      "$(git log -1 --format=%cs "$B")" \
+      "$(git log -1 --format=%cs "$BASE")" \
+      "$B"
+  done \
+| sort -rn
