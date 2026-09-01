@@ -47,3 +47,19 @@ for B in ACC TST; do
     echo "FAIL origin/$B (ciągnie commity z DEV)"
   fi
 done
+
+------
+
+git fetch origin --prune
+OD="2026-08-25"
+
+for B in $(git for-each-ref --format='%(refname:short)|%(committerdate:short)' refs/remotes/origin/ \
+           | grep -Ev '^origin/(HEAD|master|DEV|TST|ACC)\|' \
+           | awk -F'|' -v a="$OD" '$2>=a {print $1}'); do
+  ZRODLA=""
+  for E in DEV TST ACC; do
+    BASE=$(git merge-base "origin/$E" "$B")
+    git merge-base --is-ancestor "$BASE" origin/master || ZRODLA="$ZRODLA $E"
+  done
+  [ -z "$ZRODLA" ] && echo "OK   $B" || echo "FAIL $B (z:$ZRODLA)"
+done
