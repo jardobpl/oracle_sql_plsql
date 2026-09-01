@@ -1,56 +1,4 @@
 git fetch origin --prune
-
-OD="2026-08-25"
-DO="2026-09-01"
-
-for B in $(git for-each-ref --format='%(refname:short)|%(committerdate:short)' refs/remotes/origin/feature/ \
-           | awk -F'|' -v a="$OD" -v b="$DO" '$2>=a && $2<b {print $1}'); do
-  BASE=$(git merge-base origin/develop "$B")
-  if git merge-base --is-ancestor "$BASE" origin/master; then
-    echo "OK   $B"
-  else
-    echo "FAIL $B (odbita z developu)"
-  fi
-done
-
-for B in $(git for-each-ref --format='%(refname:short)' refs/remotes/origin/feature/); do
-  D=$(git log -1 --format=%cs "$B")
-  [[ "$D" < "2026-08-25" ]] && continue
-  BASE=$(git merge-base origin/develop "$B")
-  git merge-base --is-ancestor "$BASE" origin/master \
-    && echo "OK   $B ($D)" || echo "FAIL $B ($D)"
-done
-
-
-git fetch origin --prune
-OD="2026-08-25"
-
-for B in ACC TST; do
-  echo "=== origin/$B ==="
-  git log --oneline --since="$OD" "origin/master..origin/$B" | while read -r LINE; do
-    C=${LINE%% *}
-    if git merge-base --is-ancestor "$C" origin/DEV; then
-      echo "  Z DEV:  $LINE"
-    else
-      echo "  własny: $LINE"
-    fi
-  done
-done
-
-git fetch origin --prune
-
-for B in ACC TST; do
-  BASE=$(git merge-base origin/DEV "origin/$B")
-  if git merge-base --is-ancestor "$BASE" origin/master; then
-    echo "OK   origin/$B (punkt wspólny z DEV jest w masterze)"
-  else
-    echo "FAIL origin/$B (ciągnie commity z DEV)"
-  fi
-done
-
-------
-
-git fetch origin --prune
 OD="2026-08-25"
 
 for B in $(git for-each-ref --format='%(refname:short)|%(committerdate:short)' refs/remotes/origin/ \
@@ -58,21 +6,7 @@ for B in $(git for-each-ref --format='%(refname:short)|%(committerdate:short)' r
            | awk -F'|' -v a="$OD" '$2>=a {print $1}'); do
   ZRODLA=""
   for E in DEV TST ACC; do
-    BASE=$(git merge-base "origin/$E" "$B")
-    git merge-base --is-ancestor "$BASE" origin/master || ZRODLA="$ZRODLA $E"
-  done
-  [ -z "$ZRODLA" ] && echo "OK   $B" || echo "FAIL $B (z:$ZRODLA)"
-done
-
-______
-
-git fetch origin --prune
-
-for B in $(git for-each-ref --format='%(refname:short)' refs/remotes/origin/ \
-           | grep -Ev '^origin/(HEAD|master|DEV|TST|ACC)$'); do
-  ZRODLA=""
-  for E in DEV TST ACC; do
-    for C in $(git rev-list --first-parent "origin/master..origin/$E"); do
+    for C in $(git rev-list --first-parent --since="$OD" "origin/master..origin/$E"); do
       if git merge-base --is-ancestor "$C" "$B"; then
         ZRODLA="$ZRODLA $E"
         break
@@ -81,4 +15,3 @@ for B in $(git for-each-ref --format='%(refname:short)' refs/remotes/origin/ \
   done
   [ -z "$ZRODLA" ] && echo "OK   $B" || echo "FAIL $B (stoi na:$ZRODLA)"
 done
-
