@@ -1,1 +1,41 @@
+SET SERVEROUTPUT ON
+DECLARE
+  l_sql   CLOB := q'[
+    SELECT ...   -- tutaj wklej swoje zapytanie, bez średnika
+  ]';
+  l_cur   INTEGER := DBMS_SQL.OPEN_CURSOR;
+  l_cnt   INTEGER;
+  l_desc  DBMS_SQL.DESC_TAB2;
+  l_typ   VARCHAR2(30);
+BEGIN
+  DBMS_SQL.PARSE(l_cur, l_sql, DBMS_SQL.NATIVE);
+  DBMS_SQL.DESCRIBE_COLUMNS2(l_cur, l_cnt, l_desc);
 
+  FOR i IN 1 .. l_cnt LOOP
+    l_typ := CASE l_desc(i).col_type
+               WHEN 1   THEN 'VARCHAR2'
+               WHEN 96  THEN 'CHAR'
+               WHEN 112 THEN 'CLOB'
+               WHEN 2   THEN 'NUMBER'
+               WHEN 12  THEN 'DATE'
+               WHEN 180 THEN 'TIMESTAMP'
+               ELSE 'inny (kod ' || l_desc(i).col_type || ')'
+             END;
+    DBMS_OUTPUT.PUT_LINE(
+      LPAD(i, 3) || '  ' || RPAD(l_desc(i).col_name, 40) || RPAD(l_typ, 12)
+      || CASE WHEN l_desc(i).col_type IN (1, 96, 112) THEN '<- tekst' END);
+  END LOOP;
+
+  DBMS_SQL.CLOSE_CURSOR(l_cur);
+EXCEPTION
+  WHEN OTHERS THEN
+    IF DBMS_SQL.IS_OPEN(l_cur) THEN
+      DBMS_SQL.CLOSE_CURSOR(l_cur);
+    END IF;
+    RAISE;
+END;
+/
+
+SELECT SUM(CASE WHEN INSTR(kol1, CHR(10)) > 0 OR INSTR(kol1, CHR(13)) > 0 THEN 1 ELSE 0 END) AS kol1,
+       SUM(CASE WHEN INSTR(kol2, CHR(10)) > 0 OR INSTR(kol2, CHR(13)) > 0 THEN 1 ELSE 0 END) AS kol2
+FROM (/* Twoje zapytanie */);
