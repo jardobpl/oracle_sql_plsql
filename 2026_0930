@@ -39,3 +39,58 @@ END;
 SELECT SUM(CASE WHEN INSTR(kol1, CHR(10)) > 0 OR INSTR(kol1, CHR(13)) > 0 THEN 1 ELSE 0 END) AS kol1,
        SUM(CASE WHEN INSTR(kol2, CHR(10)) > 0 OR INSTR(kol2, CHR(13)) > 0 THEN 1 ELSE 0 END) AS kol2
 FROM (/* Twoje zapytanie */);
+
+
+SET SERVEROUTPUT ON
+DECLARE
+  l_sql   CLOB := q'[
+    SELECT ...   -- tutaj wklej swoje zapytanie, bez średnika
+  ]';
+  l_cur   INTEGER := DBMS_SQL.OPEN_CURSOR;
+  l_cnt   INTEGER;
+  l_desc  DBMS_SQL.DESC_TAB2;
+  l_chk   CLOB;
+  l_idx   DBMS_SQL.NUMBER_TABLE;
+  l_n     PLS_INTEGER := 0;
+  l_val   NUMBER;
+  l_ret   INTEGER;
+BEGIN
+  DBMS_SQL.PARSE(l_cur, l_sql, DBMS_SQL.NATIVE);
+  DBMS_SQL.DESCRIBE_COLUMNS2(l_cur, l_cnt, l_desc);
+
+  -- tylko kolumny tekstowe: VARCHAR2, CHAR, CLOB
+  FOR i IN 1 .. l_cnt LOOP
+    IF l_desc(i).col_type IN (1, 96, 112) THEN
+      l_n := l_n + 1;
+      l_idx(l_n) := i;
+      l_chk := l_chk || CASE WHEN l_n > 1 THEN ', ' END
+        || 'SUM(CASE WHEN INSTR("' || l_desc(i).col_name || '", CHR(10)) > 0'
+        || ' OR INSTR("' || l_desc(i).col_name || '", CHR(13)) > 0'
+        || ' THEN 1 ELSE 0 END)';
+    END IF;
+  END LOOP;
+
+  IF l_n > 0 THEN
+    l_chk := 'SELECT ' || l_chk || ' FROM (' || l_sql || ')';
+    DBMS_SQL.PARSE(l_cur, l_chk, DBMS_SQL.NATIVE);
+    FOR j IN 1 .. l_n LOOP
+      DBMS_SQL.DEFINE_COLUMN(l_cur, j, l_val);
+    END LOOP;
+    l_ret := DBMS_SQL.EXECUTE_AND_FETCH(l_cur);
+    FOR j IN 1 .. l_n LOOP
+      DBMS_SQL.COLUMN_VALUE(l_cur, j, l_val);
+      IF l_val > 0 THEN
+        DBMS_OUTPUT.PUT_LINE(RPAD(l_desc(l_idx(j)).col_name, 40) || l_val || ' wierszy');
+      END IF;
+    END LOOP;
+  END IF;
+
+  DBMS_SQL.CLOSE_CURSOR(l_cur);
+EXCEPTION
+  WHEN OTHERS THEN
+    IF DBMS_SQL.IS_OPEN(l_cur) THEN
+      DBMS_SQL.CLOSE_CURSOR(l_cur);
+    END IF;
+    RAISE;
+END;
+/
