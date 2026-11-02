@@ -66,4 +66,31 @@ WHERE table_schema = '<schemat>'
   AND (data_type = 'text'
        OR (data_type = 'character varying' AND character_maximum_length IS NULL))
 GROUP BY table_schema, table_name;
+SELECT table_name,
+       E'record (\n'
+       || string_agg('  ' || column_name || ': nullable ' ||
+          CASE
+            WHEN data_type = 'uuid' THEN 'string[max=36]'
+            WHEN data_type = 'smallint' THEN 'int16'
+            WHEN data_type IN ('integer', 'boolean') THEN 'int32'
+            WHEN data_type = 'bigint' THEN 'int64'
+            WHEN data_type = 'character varying' AND character_maximum_length IS NOT NULL
+              THEN 'string[max=' || character_maximum_length || ']'
+            WHEN data_type IN ('text', 'character varying') THEN 'string[max=255]'
+            WHEN data_type = 'character' THEN 'string[' || character_maximum_length || ']'
+            WHEN data_type = 'numeric' AND numeric_precision IS NOT NULL
+              THEN 'decimal[' || numeric_precision || ',' || numeric_scale || ']'
+            WHEN data_type = 'numeric' THEN 'decimal[38,10]'
+            WHEN data_type = 'date' THEN 'date'
+            WHEN data_type LIKE 'timestamp%' THEN 'timestamp[microseconds]'
+            WHEN data_type = 'double precision' THEN 'dfloat'
+            WHEN data_type = 'real' THEN 'sfloat'
+            ELSE 'string[max=4000]'
+          END || ';', E'\n' ORDER BY ordinal_position)
+       || E'\n)' AS schemat_ds
+FROM information_schema.columns
+WHERE table_schema = '<schemat>'
+  AND table_name IN ('<widok1>', '<widok2>')
+GROUP BY table_name
+ORDER BY table_name;
 
