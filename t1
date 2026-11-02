@@ -1,0 +1,29 @@
+Private dtmNext As Date
+
+Private Type POINTAPI
+    x As Long
+    y As Long
+End Type
+
+Private Declare PtrSafe Function GetCursorPos Lib "user32" (Point As POINTAPI) As Long
+Private Declare PtrSafe Function SetCursorPos Lib "user32" (ByVal x As Long, ByVal y As Long) As Long
+
+Sub Move_Cursor()
+    Dim Hold As POINTAPI
+    GetCursorPos Hold
+
+    SetCursorPos Hold.x + 10, Hold.y
+
+    Application.SendKeys ("^")
+    
+    dtmNext = Now + TimeValue("00:00:30")
+    Application.OnTime dtmNext, "Move_Cursor"
+
+    Cells(1, 1) = Now()
+End Sub
+
+Sub Stop_Cursor()
+    On Error Resume Next
+    Application.OnTime dtmNext, "Move_Cursor", , False
+    On Error GoTo 0
+End Sub
