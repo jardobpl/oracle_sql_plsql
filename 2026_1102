@@ -1,0 +1,69 @@
+WITH kol AS (
+  SELECT c.table_schema, c.table_name, c.column_name, c.ordinal_position,
+         quote_ident(c.column_name) AS q,
+         c.data_type,
+         c.character_maximum_length AS dl,
+         c.numeric_precision AS p,
+         c.numeric_scale AS s
+  FROM information_schema.columns c
+  WHERE c.table_schema = '<schemat>'
+    AND c.table_name IN ('<widok1>', '<widok2>')
+    -- opcjonalnie tylko kolumny wskazane przez Biznes:
+    -- AND c.column_name IN ('<kol1>', '<kol2>')
+),
+map AS (
+  SELECT k.*,
+    CASE
+      WHEN data_type = 'uuid' THEN q || '::varchar(36)'
+      WHEN data_type = 'text'
+        OR (data_type = 'character varying' AND dl IS NULL) THEN q || '::varchar(255)'
+      WHEN data_type = 'numeric' AND p IS NULL THEN q || '::numeric(38,10)'
+      WHEN data_type = 'boolean' THEN q || '::int'
+      WHEN data_type = 'timestamp with time zone'
+        THEN '(' || q || ' AT TIME ZONE ''Europe/Warsaw'')'
+      ELSE q
+    END || ' AS ' || q AS wyr_src,
+    CASE
+      WHEN data_type = 'uuid' THEN 'VARCHAR2(36 CHAR)'
+      WHEN data_type = 'smallint' THEN 'NUMBER(5)'
+      WHEN data_type = 'integer' THEN 'NUMBER(10)'
+      WHEN data_type = 'bigint' THEN 'NUMBER(19)'
+      WHEN data_type = 'character varying' AND dl IS NOT NULL
+        THEN 'VARCHAR2(' || dl || ' CHAR)'
+      WHEN data_type IN ('text', 'character varying')
+        THEN 'VARCHAR2(255 CHAR) /* SPRAWDZ */'
+      WHEN data_type = 'character' THEN 'CHAR(' || dl || ' CHAR)'
+      WHEN data_type = 'numeric' AND p IS NOT NULL
+        THEN 'NUMBER(' || p || ',' || s || ')'
+      WHEN data_type = 'numeric' THEN 'NUMBER(38,10) /* SPRAWDZ */'
+      WHEN data_type = 'boolean' THEN 'NUMBER(1)'
+      WHEN data_type = 'date' THEN 'DATE'
+      WHEN data_type LIKE 'timestamp%' THEN 'TIMESTAMP(6)'
+      WHEN data_type = 'double precision' THEN 'BINARY_DOUBLE'
+      WHEN data_type = 'real' THEN 'BINARY_FLOAT'
+      ELSE 'VARCHAR2(4000 CHAR) /* SPRAWDZ: ' || data_type || ' */'
+    END AS typ_ora
+  FROM kol k
+)
+SELECT table_name,
+       'SELECT' || E'\n    '
+       || string_agg(wyr_src, E',\n    ' ORDER BY ordinal_position)
+       || E'\nFROM ' || table_schema || '.' || table_name AS zapytanie_src,
+       'CREATE TABLE ' || upper(table_name) || ' (' || E'\n    '
+       || string_agg(upper(column_name) || ' ' || typ_ora,
+                     E',\n    ' ORDER BY ordinal_position)
+       || E'\n);' AS ddl_oracle
+FROM map
+GROUP BY table_schema, table_name
+ORDER BY table_name;
+
+SELECT 'SELECT ' || string_agg('MAX(LENGTH(' || quote_ident(column_name) || ')) AS '
+       || quote_ident(column_name), ', ' ORDER BY ordinal_position)
+       || ' FROM ' || table_schema || '.' || table_name || ';'
+FROM information_schema.columns
+WHERE table_schema = '<schemat>'
+  AND table_name IN ('<widok1>', '<widok2>')
+  AND (data_type = 'text'
+       OR (data_type = 'character varying' AND character_maximum_length IS NULL))
+GROUP BY table_schema, table_name;
+
