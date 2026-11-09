@@ -5,29 +5,45 @@ WITH v AS (
 ),
 d AS (
   SELECT DISTINCT ON (c.table_schema, c.table_name)
-         c.table_schema AS schemat, c.table_name AS widok,
-         c.column_name AS kol_daty
+         c.table_schema AS schemat,
+         c.table_name   AS widok,
+         c.column_name  AS kol_daty
   FROM information_schema.columns c
   JOIN v ON v.schemat = c.table_schema AND v.widok = c.table_name
   WHERE c.data_type LIKE 'timestamp%'
-    AND c.column_name ILIKE '<wzorzec>'
+    AND c.column_name ILIKE '%modif%'
   ORDER BY c.table_schema, c.table_name, c.ordinal_position
+),
+q AS (
+  SELECT v.schemat, v.widok, d.kol_daty,
+         CASE
+           WHEN d.kol_daty IS NOT NULL THEN format(
+$q$SELECT COUNT(*) AS wiersze,
+          COUNT(*) FILTER (WHERE %3$I >= now() - interval '30 days') AS zmienione_30d,
+          MIN(%3$I)::timestamp AS najstarsza,
+          MAX(%3$I)::timestamp AS najnowsza,
+          ROUND(AVG(pg_column_size(t))) AS sr_bajty_wiersz
+   FROM %1$I.%2$I t$q$, v.schemat, v.widok, d.kol_daty)
+           ELSE format(
+$q$SELECT COUNT(*) AS wiersze,
+          ROUND(AVG(pg_column_size(t))) AS sr_bajty_wiersz
+   FROM %1$I.%2$I t$q$, v.schemat, v.widok)
+         END AS zap
+  FROM v
+  LEFT JOIN d ON d.schemat = v.schemat AND d.widok = v.widok
+),
+x AS (
+  SELECT schemat, widok, kol_daty,
+         query_to_xml(zap, true, true, '') AS wyn
+  FROM q
 )
-SELECT string_agg(
-  CASE WHEN d.kol_daty IS NOT NULL THEN format(
-$q$SELECT %1$L::text AS schemat, %2$L::text AS widok, %3$L::text AS kol_daty,
-       COUNT(*) AS wiersze,
-       COUNT(*) FILTER (WHERE %3$I >= now() - interval '30 days') AS zmienione_30d,
-       MIN(%3$I)::timestamp AS najstarsza,
-       MAX(%3$I)::timestamp AS najnowsza,
-       ROUND(AVG(pg_column_size(t))) AS sr_bajty_wiersz
-FROM %1$I.%2$I t$q$, v.schemat, v.widok, d.kol_daty)
-  ELSE format(
-$q$SELECT %1$L::text, %2$L::text, NULL::text,
-       COUNT(*), NULL::bigint, NULL::timestamp, NULL::timestamp,
-       ROUND(AVG(pg_column_size(t)))
-FROM %1$I.%2$I t$q$, v.schemat, v.widok)
-  END,
-  E'\nUNION ALL\n' ORDER BY v.schemat, v.widok) || ';'
-FROM v
-LEFT JOIN d ON d.schemat = v.schemat AND d.widok = v.widok;
+SELECT schemat,
+       widok,
+       kol_daty,
+       (xpath('/row/wiersze/text()', wyn))[1]::text::bigint          AS wiersze,
+       (xpath('/row/zmienione_30d/text()', wyn))[1]::text::bigint    AS zmienione_30d,
+       (xpath('/row/najstarsza/text()', wyn))[1]::text::timestamp    AS najstarsza,
+       (xpath('/row/najnowsza/text()', wyn))[1]::text::timestamp     AS najnowsza,
+       (xpath('/row/sr_bajty_wiersz/text()', wyn))[1]::text::numeric AS sr_bajty_wiersz
+FROM x
+ORDER BY schemat, widok;
