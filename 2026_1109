@@ -47,3 +47,29 @@ SELECT schemat,
        (xpath('/row/sr_bajty_wiersz/text()', wyn))[1]::text::numeric AS sr_bajty_wiersz
 FROM x
 ORDER BY schemat, widok;
+
+-------
+
+SELECT table_schema AS schemat,
+       table_name   AS widok,
+       24 + SUM(
+         CASE
+           WHEN data_type = 'uuid' THEN 16
+           WHEN data_type = 'smallint' THEN 2
+           WHEN data_type IN ('integer', 'date', 'real') THEN 4
+           WHEN data_type IN ('bigint', 'double precision')
+             OR data_type LIKE 'timestamp%' THEN 8
+           WHEN data_type = 'boolean' THEN 1
+           WHEN data_type = 'numeric' THEN 10
+           WHEN data_type IN ('character varying', 'character')
+                AND character_maximum_length IS NOT NULL
+             THEN LEAST(character_maximum_length, 100) / 2 + 1
+           WHEN data_type IN ('text', 'character varying') THEN 50
+           WHEN data_type IN ('json', 'jsonb') THEN 200
+           ELSE 20
+         END) AS szac_bajty_wiersz
+FROM information_schema.columns
+WHERE table_schema IN ('<schemat1>', '<schemat2>')
+  AND table_name IN ('<widok1>', '<widok2>')
+GROUP BY table_schema, table_name
+ORDER BY 1, 2;
