@@ -73,3 +73,59 @@ WHERE table_schema IN ('<schemat1>', '<schemat2>')
   AND table_name IN ('<widok1>', '<widok2>')
 GROUP BY table_schema, table_name
 ORDER BY 1, 2;
+
+
+SELECT
+    coalesce(ps.policy_number, c.declared_policy_number) AS numer_polisy,
+    regexp_replace(ci.variant_code, '^.*_', '') || '_' ||
+      upper(regexp_replace(ci.variant_name, '\s*\(.*\)$', ''))
+                                                         AS rodzaj_polisy,
+
+    ci.statistical_symbol                                AS ryzyko,
+
+    c.case_number                     AS numer_sprawy_nadany_przez_operatora,
+
+    s.nr_swiadczenia                  AS numer_swiadczenia_w_sprawie,
+
+    e.event_date::timestamp           AS data_zdarzenia,
+
+    date_trunc('second', c.registration_date) AS data_i_godzina_zgloszenia,
+
+    s.kod                             AS rodzaj_swiadczenia,
+
+    coalesce(ss.etykieta, upper(s.type_name))   AS "RODZAJ_SWIAD",
+
+    coalesce(sp.etykieta, upper(c.reason_name)) AS "PRZYCZYNA_ZGL",
+
+    date_trunc('second', s.order_date)
+                                      AS data_rozpoczecia_realizacji_swiadczenia,
+
+    CASE WHEN s.nr_r = 1
+         THEN date_trunc('second', r.data_rezerwy) END     AS data_rezerwy,
+
+    CASE WHEN s.nr_r = 1
+         THEN coalesce(r.kwota_rezerwy, 0) ELSE 0 END      AS kwota_rezerwy,
+
+    CASE
+        WHEN s.kod <> 'W'           THEN NULL
+        WHEN s.type_code = 'REFUND' THEN s.decision_date::timestamp
+        ELSE date_trunc('second', coalesce(wk.data_wyplaty, rz.data_wyplaty))
+    END                               AS data_wyplaty_swiadczenia,
+
+    CASE
+        WHEN s.kod <> 'W'           THEN NULL
+        WHEN s.type_code = 'REFUND' THEN s.refund_amount
+        ELSE rz.kwota_swiadczenia
+    END                               AS kwota_swiadczenia,
+
+    CASE
+        WHEN s.kod <> 'W'           THEN NULL
+        WHEN s.type_code = 'REFUND' THEN s.refund_currency
+        ELSE 'PLN'
+    END                               AS waluta_swiadczenia,
+
+    e.country_code                    AS kod_kraju_zdarzenia,
+
+    date_trunc('second', now())       AS data_przygotowania_pliku,
+
+    s.nr_swiadczenia || ':' || c.case_number AS id_faktury
