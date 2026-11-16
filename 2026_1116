@@ -1,0 +1,24 @@
+SELECT DISTINCT
+       v.relname                    AS widok,
+       tn.nspname || '.' || t.relname AS tabela
+FROM pg_rewrite r
+JOIN pg_class v      ON v.oid  = r.ev_class
+JOIN pg_namespace vn ON vn.oid = v.relnamespace
+JOIN pg_depend d     ON d.objid = r.oid
+JOIN pg_class t      ON t.oid  = d.refobjid
+JOIN pg_namespace tn ON tn.oid = t.relnamespace
+WHERE vn.nspname = '<schemat_widokow>'
+  AND t.relkind IN ('r', 'p')
+  AND t.oid <> v.oid
+ORDER BY 1, 2;
+
+
+SELECT conrelid::regclass  AS tabela_elementow,
+       confrelid::regclass AS tabela_rodzica,
+       pg_get_constraintdef(oid) AS definicja
+FROM pg_constraint
+WHERE contype = 'f'
+  AND connamespace = '<schemat_tabel>'::regnamespace
+ORDER BY 1;
+
+SELECT pg_get_viewdef('<schemat_widokow>.<widok>'::regclass, true);
